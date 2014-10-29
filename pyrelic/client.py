@@ -13,6 +13,7 @@ from .exceptions import (
 from .application import Application
 from .base_client import BaseClient
 from .metric import Metric
+from .metric_v2 import MetricV2
 from .threshold import Threshold
 from .server import Server
 
@@ -30,12 +31,14 @@ class Client(BaseClient):
         super(Client, self).__init__(proxy=proxy, retries=retries, retry_delay=retry_delay, timeout=timeout)
 
         if not account_id or not api_key:
-            raise NewRelicCredentialException("""
-Pyrelic could not find your account credentials. Pass them into the
-Client like this:
+            raise NewRelicCredentialException(
+                """
+                Pyrelic could not find your account credentials. Pass them into the
+                Client like this:
 
-client = pyrelic.Client(account_id='12345', api_key='1234567890abcdef123456789')
-""")
+                client = pyrelic.Client(account_id='12345', api_key='1234567890abcdef123456789')
+                """
+            )
 
         self.account_id = account_id
         self.api_key = api_key
@@ -162,6 +165,9 @@ client = pyrelic.Client(account_id='12345', api_key='1234567890abcdef123456789')
         raise NotImplemented
 
     def get_dashboard_html_fragment(self):
+        """
+        Not yet implemented
+        """
         raise NotImplemented
 
     def notify_deployment(self, application_id=None, application_name=None, description=None, revision=None, changelog=None, user=None):
@@ -307,6 +313,160 @@ client = pyrelic.Client(account_id='12345', api_key='1234567890abcdef123456789')
         metrics = []
         for metric in response.findall('.//metric'):
             metrics.append(Metric(metric))
+        return metrics
+
+    def get_instance_ids_v2(self, application_id):
+        """
+        Requires: application_id
+        Method: Get
+        Endpoint: api.newrelic.com
+        Restrictions: Rate limit to 1x per minute
+        Errors: 401 Invalid API key,
+                401 Invalid request, API key required,
+                403 New Relic API access has not been enabled
+                500 A server error occured, please contact New Relic support
+        Return: A list of instance ids
+        """
+        # TODO: it may be nice to have some helper methods that make it easier
+        #       to query by common time frames based off the time period folding
+        #       of the metrics returned by the New Relic API.
+
+        # Make sure we aren't going to hit an API timeout
+        self._api_rate_limit_exceeded(self.get_instances_summary_v2)
+
+        endpoint = "https://api.newrelic.com"
+        uri = "{endpoint}/v2/applications/{app_id}/instances.xml"\
+              .format(endpoint=endpoint, app_id=application_id)
+        # A longer timeout is needed due to the
+        # amount of data that can be returned
+        response = self._make_get_request(uri, parameters={}, timeout=max(self.timeout, 300.0))
+
+        # Parsing our response into a list of instance ids
+        ids = []
+        for instance in response.findall('.//application_instance'):
+            ids.append(instance.find('id').text)
+
+        return ids
+
+    def get_instances_summary_v2(self, application_id):
+        """
+        Requires: application_id
+        Method: Get
+        Endpoint: api.newrelic.com
+        Restrictions: Rate limit to 1x per minute
+        Errors: 401 Invalid API key,
+                401 Invalid request, API key required,
+                403 New Relic API access has not been enabled
+                500 A server error occured, please contact New Relic support
+        Return: A hashmap with each instance id as key. The correspondent value
+                is also a hashmap of the fields under application_summary in the
+                return response
+        """
+        # TODO: it may be nice to have some helper methods that make it easier
+        #       to query by common time frames based off the time period folding
+        #       of the metrics returned by the New Relic API.
+
+        # Make sure we aren't going to hit an API timeout
+        self._api_rate_limit_exceeded(self.get_instances_summary_v2)
+
+        endpoint = "https://api.newrelic.com"
+        uri = "{endpoint}/v2/applications/{app_id}/instances.xml"\
+              .format(endpoint=endpoint, app_id=application_id)
+        # A longer timeout is needed due to the
+        # amount of data that can be returned
+        response = self._make_get_request(uri, parameters={}, timeout=max(self.timeout, 300.0))
+
+        # Parsing our response into a hashmap with instance id as key
+        instances = {}
+        for instance in response.findall('.//application_instance'):
+            instance_id = instance.find('id').text
+            instances[instance_id] = {}
+            for child in instance:
+                if child.tag != 'application_summary':
+                    instances[instance_id][child.tag] = child.text
+            summary = instance.find('application_summary')
+            for child in summary:
+                instances[instance_id][child.tag] = child.text
+
+        return instances
+
+    def get_instance_metric_data_v2(self, application_id, instance_id, names, values, begin, end, summarize="false"):
+        """
+        Requires: application ID,
+                  instance ID,
+                  list of metric names,
+                  list of metric values,
+                  begin,
+                  end
+        Method: Get
+        Endpoint: api.newrelic.com
+        Restrictions: Rate limit to 1x per minute
+        Errors: 401 Invalid API key,
+                401 Invalid request, API key required,
+                403 New Relic API access has not been enabled
+                500 A server error occured, please contact New Relic support
+        Returns: A hashmap with each input value as key. The correspondent value
+                 is a list of MetricV2 objects, each will have information about its
+                 begin/end time, metric name and any associated values
+        """
+        # TODO: it may be nice to have some helper methods that make it easier
+        #       to query by common time frames based off the time period folding
+        #       of the metrics returned by the New Relic API.
+
+        # Make sure we aren't going to hit an API timeout
+        self._api_rate_limit_exceeded(self.get_instance_metric_data_v2)
+
+        # Just in case the API needs parameters to be in order
+        parameters = {}
+
+        # Figure out what we were passed and set our parameter correctly
+        # Set our parameters
+        parameters['names[]'] = names
+        parameters['values[]'] = values
+        parameters['from'] = begin
+        parameters['to'] = end
+        parameters['summarize'] = summarize
+
+        endpoint = "https://api.newrelic.com"
+        uri = "{endpoint}/v2/applications/{app_id}/instances/{instance_id}/metrics/data.xml"\
+              .format(endpoint=endpoint, app_id=application_id, instance_id=instance_id)
+        # A longer timeout is needed due to the
+        # amount of data that can be returned
+        response = self._make_get_request(uri, parameters=parameters, timeout=max(self.timeout, 300.0))
+
+        # Parsing our response into hashmap with each name as key while
+        # the value is an array for MetricV2 with different timeslice
+        # For example: names = ['Apdex', 'Browser Apdex'],
+        #              values = ['score', 'threshold']
+        # 
+        # // First timeslice
+        # print metrics["Apdex"][0].begin
+        # print metrics["Apdex"][0].end
+        # print metrics["Apdex"][0].score
+        # print metrics["Apdex"][0].threshold
+        # print metrics["Browser/Apdex"][0].begin
+        # print metrics["Browser/Apdex"][0].end
+        # print metrics["Browser/Apdex"][0].score
+        # print metrics["Browser/Apdex"][0].threshold
+        #
+        # // Second timeslice
+        # print metrics["Apdex"][1].begin
+        # print metrics["Apdex"][1].end
+        # print metrics["Apdex"][1].score
+        # print metrics["Apdex"][1].threshold
+        # print metrics["Browser/Apdex"][1].begin
+        # print metrics["Browser/Apdex"][1].end
+        # print metrics["Browser/Apdex"][1].score
+        # print metrics["Browser/Apdex"][1].threshold
+        
+        metrics = {}
+        for name in names:
+            metrics[name] = []
+            for metric in response.findall('.//metric'):
+                if (name == metric.find('name').text):
+                    for timeslice in metric.findall('.//timeslice'):
+                        metrics[name].append(MetricV2(timeslice, values))
+
         return metrics
 
     def get_threshold_values(self, application_id):
