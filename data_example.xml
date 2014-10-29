@@ -1,0 +1,65 @@
+<!-- api v1 -->
+<!-- Query data on application level -->
+<?xml version="1.0" encoding="UTF-8"?>
+<metrics type="array">
+  <metric name="Apdex" begin="2014-10-28T09:53:00Z" end="2014-10-28T09:54:00Z" app="[app_name]" agent_id="[app_id]">
+    <field name="score">0.75</field>
+  </metric>
+  <metric name="Apdex" begin="2014-10-28T09:54:00Z" end="2014-10-28T09:55:00Z" app="[app_name]" agent_id="[app_id]">
+    <field name="score">0.76</field>
+  </metric>
+</metrics>
+
+<!-- api v2 -->
+<!-- Query data on instance level -->
+<?xml version="1.0" encoding="UTF-8"?>
+<metric_data_response>
+  <metric_data>
+    <from>2014-10-29T03:59:00+00:00</from>
+    <to>2014-10-29T04:00:00+00:00</to>
+    <metrics>
+      <metric>
+        <name>Apdex</name>
+        <timeslices>
+          <timeslice>
+            <from>2014-10-29T03:58:00+00:00</from>
+            <to>2014-10-29T03:59:00+00:00</to>
+            <values>
+              <score>0.85</score>
+              <threshold>0.5</threshold>
+            </values>
+          </timeslice>
+          <timeslice>
+            <from>2014-10-29T03:59:00+00:00</from>
+            <to>2014-10-29T04:00:00+00:00</to>
+            <values>
+              <score>0.86</score>
+              <threshold>0.5</threshold>
+            </values>
+          </timeslice>
+        </timeslices>
+      </metric>
+      <metric>
+        <name>Browser/Apdex</name>
+        <timeslices>
+          <timeslice>
+            <from>2014-10-29T03:58:00+00:00</from>
+            <to>2014-10-29T03:59:00+00:00</to>
+            <values>
+              <score>1.0</score>
+              <threshold>0.5</threshold>
+            </values>
+          </timeslice>
+          <timeslice>
+            <from>2014-10-29T03:59:00+00:00</from>
+            <to>2014-10-29T04:00:00+00:00</to>
+            <values>
+              <score>0.9</score>
+              <threshold>0.5</threshold>
+            </values>
+          </timeslice>
+        </timeslices>
+      </metric>
+    </metrics>
+  </metric_data>
+</metric_data_response>
