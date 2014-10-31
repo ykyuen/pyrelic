@@ -315,6 +315,60 @@ class Client(BaseClient):
             metrics.append(Metric(metric))
         return metrics
 
+    def get_metric_data_v2(self, application_id, names, values, begin, end, summarize="false", limit=True):
+        """
+        Requires: application ID,
+                  list of metric names,
+                  list of metric values,
+                  begin,
+                  end
+        Method: Get
+        Endpoint: api.newrelic.com
+        Restrictions: Rate limit to 1x per minute
+        Errors: 401 Invalid API key,
+                401 Invalid request, API key required,
+                403 New Relic API access has not been enabled
+                500 A server error occured, please contact New Relic support
+        Returns: A hashmap with each input value as key. The correspondent value
+                 is a list of MetricV2 objects, each will have information about its
+                 begin/end time, metric name and any associated values
+        """
+        # TODO: it may be nice to have some helper methods that make it easier
+        #       to query by common time frames based off the time period folding
+        #       of the metrics returned by the New Relic API.
+
+        # Make sure we aren't going to hit an API timeout
+        if limit:
+            self._api_rate_limit_exceeded(self.get_metric_data_v2)
+
+        # Just in case the API needs parameters to be in order
+        parameters = {}
+
+        # Figure out what we were passed and set our parameter correctly
+        # Set our parameters
+        parameters['names[]'] = names
+        # parameters['values[]'] = values # TODO: if more then one metric contains the same value label, none is return
+        parameters['from'] = begin
+        parameters['to'] = end
+        parameters['summarize'] = summarize
+
+        endpoint = "https://api.newrelic.com"
+        uri = "{endpoint}/v2/applications/{app_id}/metrics/data.xml"\
+              .format(endpoint=endpoint, app_id=application_id)
+        # A longer timeout is needed due to the
+        # amount of data that can be returned
+        response = self._make_get_request(uri, parameters=parameters, timeout=max(self.timeout, 300.0))
+
+        metrics = {}
+        for name in names:
+            metrics[name] = []
+            for metric in response.findall('.//metric'):
+                if (name == metric.find('name').text):
+                    for timeslice in metric.findall('.//timeslice'):
+                        metrics[name].append(MetricV2(timeslice, values))
+
+        return metrics
+
     def get_instance_ids_v2(self, application_id):
         """
         Requires: application_id
@@ -332,7 +386,7 @@ class Client(BaseClient):
         #       of the metrics returned by the New Relic API.
 
         # Make sure we aren't going to hit an API timeout
-        self._api_rate_limit_exceeded(self.get_instances_summary_v2)
+        self._api_rate_limit_exceeded(self.get_instance_ids_v2)
 
         endpoint = "https://api.newrelic.com"
         uri = "{endpoint}/v2/applications/{app_id}/instances.xml"\
@@ -390,7 +444,7 @@ class Client(BaseClient):
 
         return instances
 
-    def get_instance_metric_data_v2(self, application_id, instance_id, names, values, begin, end, summarize="false"):
+    def get_instance_metric_data_v2(self, application_id, instance_id, names, values, begin, end, summarize="false", limit=True):
         """
         Requires: application ID,
                   instance ID,
@@ -414,7 +468,8 @@ class Client(BaseClient):
         #       of the metrics returned by the New Relic API.
 
         # Make sure we aren't going to hit an API timeout
-        self._api_rate_limit_exceeded(self.get_instance_metric_data_v2)
+        if limit:
+            self._api_rate_limit_exceeded(self.get_instance_metric_data_v2)
 
         # Just in case the API needs parameters to be in order
         parameters = {}
@@ -422,7 +477,7 @@ class Client(BaseClient):
         # Figure out what we were passed and set our parameter correctly
         # Set our parameters
         parameters['names[]'] = names
-        parameters['values[]'] = values
+        # parameters['values[]'] = values # TODO: if more then one metric contains the same value label, none is return
         parameters['from'] = begin
         parameters['to'] = end
         parameters['summarize'] = summarize
