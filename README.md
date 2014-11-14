@@ -1,3 +1,22 @@
+# About this forked repository
+
+Thanks [andrewgross](https://github.com/andrewgross) for writing the pyrelic package for New Relic API v1. I was working on the monitoring project and the metrics i need is only available on New Relic API v2. So I have added few functions in this forked repository.
+
+Please refer to the following functions in client.py. It could give u some hints on how to make the query.
+* get_metric_data_v2
+* get_instance_ids_v2
+* get_applications_summary_v2
+* get_servers_summary_v2
+* get_server_metric_data_v2
+* get_instances_summary_v2
+* get_instance_metric_data_v2
+
+The above functions are constructed base on the available endpoints in the [New Relic API Explorer](https://rpm.newrelic.com/api/explore). It's good to make your data query in the explorer first before coding.
+
+Since the code i have added is not generic enough, i may try to reconstruct the code pattern later if i have time. Please feel free to comment or work together until the code is good enough for sending a pull request.
+
+---
+
 # Pyrelic [![Build Status](https://api.travis-ci.org/andrewgross/pyrelic.png#master)](https://travis-ci.org/andrewgross/pyrelic)
 
 
