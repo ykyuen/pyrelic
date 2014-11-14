@@ -402,6 +402,156 @@ class Client(BaseClient):
 
         return ids
 
+    def get_applications_summary_v2(self, application_ids):
+        """
+        Requires: list of application ids
+        Method: Get
+        Endpoint: api.newrelic.com
+        Restrictions: Rate limit to 1x per minute
+        Errors: 401 Invalid API key,
+                401 Invalid request, API key required,
+                403 New Relic API access has not been enabled
+                500 A server error occured, please contact New Relic support
+        Return: A hashmap with each application id as key. The correspondent value
+                is also a hashmap of the fields under summary in the return
+                response
+        """
+        # TODO: it may be nice to have some helper methods that make it easier
+        #       to query by common time frames based off the time period folding
+        #       of the metrics returned by the New Relic API.
+
+        # Make sure we aren't going to hit an API timeout
+        self._api_rate_limit_exceeded(self.get_applications_summary_v2)
+
+        # Just in case the API needs parameters to be in order
+        parameters = {}
+
+        # Figure out what we were passed and set our parameter correctly
+        # Set our parameters
+        if application_ids is not None: parameters['filter[ids]'] = ",".join(application_ids)
+
+        endpoint = "https://api.newrelic.com"
+        uri = "{endpoint}/v2/applications.xml".format(endpoint=endpoint)
+        # A longer timeout is needed due to the
+        # amount of data that can be returned
+        response = self._make_get_request(uri, parameters=parameters, timeout=max(self.timeout, 300.0))
+
+        # Parsing our response into a hashmap with application id as key
+        applications = {}
+        for application in response.findall('.//application'):
+            application_id = application.find('id').text
+            applications[application_id] = {}
+            for child in application:
+                if child.tag != 'application_summary' and child.tag != 'settings' and child.tag != 'end_user_summary' and child.tag != 'links':
+                    applications[application_id][child.tag] = child.text
+            summary = application.find('application_summary')
+            for child in summary:
+                applications[application_id][child.tag] = child.text
+
+        return applications
+
+    def get_servers_summary_v2(self, server_ids):
+        """
+        Requires: list of server ids
+        Method: Get
+        Endpoint: api.newrelic.com
+        Restrictions: Rate limit to 1x per minute
+        Errors: 401 Invalid API key,
+                401 Invalid request, API key required,
+                403 New Relic API access has not been enabled
+                500 A server error occured, please contact New Relic support
+        Return: A hashmap with each server id as key. The correspondent value
+                is also a hashmap of the fields under summary in the return
+                response
+        """
+        # TODO: it may be nice to have some helper methods that make it easier
+        #       to query by common time frames based off the time period folding
+        #       of the metrics returned by the New Relic API.
+
+        # Make sure we aren't going to hit an API timeout
+        self._api_rate_limit_exceeded(self.get_servers_summary_v2)
+
+        # Just in case the API needs parameters to be in order
+        parameters = {}
+
+        # Figure out what we were passed and set our parameter correctly
+        # Set our parameters
+        if server_ids is not None: parameters['filter[ids]'] = ",".join(server_ids)
+
+        endpoint = "https://api.newrelic.com"
+        uri = "{endpoint}/v2/servers.xml".format(endpoint=endpoint)
+        # A longer timeout is needed due to the
+        # amount of data that can be returned
+        response = self._make_get_request(uri, parameters=parameters, timeout=max(self.timeout, 300.0))
+
+        # Parsing our response into a hashmap with server id as key
+        servers = {}
+        for server in response.findall('.//server'):
+            server_id = server.find('id').text
+            servers[server_id] = {}
+            for child in server:
+                if child.tag != 'summary' and child.tag != 'links':
+                    servers[server_id][child.tag] = child.text
+            summary = server.find('summary')
+            for child in summary:
+                servers[server_id][child.tag] = child.text
+
+        return servers
+
+    def get_server_metric_data_v2(self, server_id, names, values, begin, end, summarize="false", limit=True):
+        """
+        Requires: server ID,
+                  list of metric names,
+                  list of metric values,
+                  begin,
+                  end
+        Method: Get
+        Endpoint: api.newrelic.com
+        Restrictions: Rate limit to 1x per minute
+        Errors: 401 Invalid API key,
+                401 Invalid request, API key required,
+                403 New Relic API access has not been enabled
+                500 A server error occured, please contact New Relic support
+        Returns: A hashmap with each input value as key. The correspondent value
+                 is a list of MetricV2 objects, each will have information about its
+                 begin/end time, metric name and any associated values
+        """
+        # TODO: it may be nice to have some helper methods that make it easier
+        #       to query by common time frames based off the time period folding
+        #       of the metrics returned by the New Relic API.
+
+        # Make sure we aren't going to hit an API timeout
+        if limit:
+            self._api_rate_limit_exceeded(self.get_server_metric_data_v2)
+
+        # Just in case the API needs parameters to be in order
+        parameters = {}
+
+        # Figure out what we were passed and set our parameter correctly
+        # Set our parameters
+        parameters['names[]'] = names
+        # parameters['values[]'] = values # TODO: if more then one metric contains the same value label, none is return
+        parameters['from'] = begin
+        parameters['to'] = end
+        parameters['summarize'] = summarize
+
+        endpoint = "https://api.newrelic.com"
+        uri = "{endpoint}/v2/servers/{server_id}/metrics/data.xml"\
+              .format(endpoint=endpoint, server_id=server_id)
+        # A longer timeout is needed due to the
+        # amount of data that can be returned
+        response = self._make_get_request(uri, parameters=parameters, timeout=max(self.timeout, 300.0))
+        
+        metrics = {}
+        for name in names:
+            metrics[name] = []
+            for metric in response.findall('.//metric'):
+                if (name == metric.find('name').text):
+                    for timeslice in metric.findall('.//timeslice'):
+                        metrics[name].append(MetricV2(timeslice, values))
+
+        return metrics
+
     def get_instances_summary_v2(self, application_id):
         """
         Requires: application_id
