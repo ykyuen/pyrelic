@@ -28,7 +28,7 @@ The documentation in this library's docstrings was derived from the [New Relic R
 
 ## Installation
 ```bash
-$ pip install pyrelic
+$ pip install https://github.com/ykyuen/pyrelic/archive/master.zip
 ```
 
 ## Examples
